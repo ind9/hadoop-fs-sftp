@@ -46,4 +46,16 @@
             <version>4.12</version>
         </dependency>
     </dependencies>
+     <distributionManagement>
+        <repository>
+            <id>central</id>
+            <name>Indix Artifacts-releases</name>
+            <url>http://artifacts.indix.tv:8081/artifactory/ext-release-local</url>
+        </repository>
+        <snapshotRepository>
+            <id>snapshots</id>
+            <name>Indix Artifacts-releases</name>
+            <url>http://artifacts.indix.tv:8081/artifactory/ext-snapshot-local</url>
+        </snapshotRepository>
+    </distributionManagement>
 </project>
