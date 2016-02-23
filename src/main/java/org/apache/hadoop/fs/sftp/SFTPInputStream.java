@@ -63,12 +63,13 @@ class SFTPInputStream extends FSInputStream {
 
     @Override
     public void seek(long position) throws IOException {
-        throw new IOException(E_SEEK_NOTSUPPORTED);
+        this.wrappedStream.skip(position);
+        this.pos = position;
     }
 
     @Override
     public boolean seekToNewSource(long targetPos) throws IOException {
-        throw new IOException(E_SEEK_NOTSUPPORTED);
+        return false;
     }
 
     @Override
