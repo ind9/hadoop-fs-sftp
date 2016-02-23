@@ -217,6 +217,32 @@ public class TestSFTPFileSystem {
     }
 
     /**
+     * Test writing to a file and and seek its value from a middle pos.
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testSeekFile() throws Exception {
+        byte[] data = "yaks".getBytes();
+        Path file = touch(localFs, name.getMethodName().toLowerCase(), data);
+        FSDataInputStream is = null;
+        try {
+            is = sftpFs.open(file);
+            byte[] b = new byte[2];
+            is.seek(2);
+            is.read(b);
+            assertArrayEquals("ks".getBytes(), b);
+
+        } finally {
+            if (is != null) {
+                is.close();
+            }
+        }
+        assertTrue(sftpFs.delete(file, false));
+    }
+
+
+    /**
      * Test getting the status of a file.
      *
      * @throws Exception
