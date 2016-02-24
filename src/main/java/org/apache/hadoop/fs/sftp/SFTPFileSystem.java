@@ -87,7 +87,7 @@ public class SFTPFileSystem extends FileSystem {
     /**
      * Set configuration from UI.
      *
-     * @param uri
+     * @param uriInfo
      * @param conf
      * @throws IOException
      */
@@ -131,6 +131,12 @@ public class SFTPFileSystem extends FileSystem {
         connectionPool = new SFTPConnectionPool(connectionMax);
     }
 
+    @Override
+    public void close() throws IOException {
+        super.close();
+        this.connectionPool.shutdown();
+    }
+
     /**
      * Connecting by using configuration parameters.
      *
@@ -155,7 +161,7 @@ public class SFTPFileSystem extends FileSystem {
     /**
      * Logout and disconnect the given channel.
      *
-     * @param client
+     * @param channel
      * @throws IOException
      */
     private void disconnect(ChannelSftp channel) throws IOException {
