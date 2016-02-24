@@ -141,6 +141,7 @@ class SFTPConnectionPool {
         JSch jsch = new JSch();
         Session session = null;
         try {
+
             if (user == null || user.length() == 0) {
                 user = System.getProperty("user.name");
             }
@@ -152,35 +153,42 @@ class SFTPConnectionPool {
             if (keyFile != null && keyFile.length() > 0) {
                 jsch.addIdentity(keyFile);
             }
-
-            if (port <= 0) {
-                session = jsch.getSession(user, host);
-            } else {
-                session = jsch.getSession(user, host, port);
-            }
-
-            session.setPassword(password);
-
-            java.util.Properties config = new java.util.Properties();
-            config.put("StrictHostKeyChecking", "no");
-            session.setConfig(config);
-            /*
-                Ugly fix for the verify:false error Jsch throws when you make thousands of connections.
-                https://sourceforge.net/p/jsch/bugs/80/
-                Blindly retry till three times and throw up after.
-             */
-
             int attempt = 0;
             int maxAttempt = 3;
             while(attempt <= maxAttempt) {
                 try {
+                    if (port <= 0) {
+                        session = jsch.getSession(user, host);
+                    } else {
+                        session = jsch.getSession(user, host, port);
+                    }
+
+                    session.setPassword(password);
+
+                    java.util.Properties config = new java.util.Properties();
+                    config.put("StrictHostKeyChecking", "no");
+                    session.setConfig(config);
+                    /*
+                        Ugly fix for the verify:false error Jsch throws when you make thousands of connections.
+                        https://sourceforge.net/p/jsch/bugs/80/
+                        Blindly retry till three times and throw up after.
+                    */
+
                     ++attempt;
-                    session.connect();
+                    session.connect(3 * 1000);
                     attempt = maxAttempt + 1;
-                } catch (JSchException e) {
-                    if(!e.getMessage().equalsIgnoreCase("verify: false")) throw e;
-                    if(attempt > maxAttempt) throw e;
-                    //else pass. Do nothing and let the while repeat
+                    } catch (JSchException e) {
+                        if(!e.getMessage().equalsIgnoreCase("verify: false") || attempt > maxAttempt) {
+                            throw e;
+                        }
+                        if (session != null) {
+                            session.disconnect();
+                            session = null;
+                        }
+                        LOG.info(
+                            "session.connect() threw a verify:false exception. Going for another attempt. Attempt: "+attempt
+                        );
+                        //else pass. Do nothing and let the while repeat
                 }
             }
             channel = (ChannelSftp) session.openChannel("sftp");
