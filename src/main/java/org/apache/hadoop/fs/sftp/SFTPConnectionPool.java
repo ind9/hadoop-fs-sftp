@@ -164,8 +164,25 @@ class SFTPConnectionPool {
             java.util.Properties config = new java.util.Properties();
             config.put("StrictHostKeyChecking", "no");
             session.setConfig(config);
+            /*
+                Ugly fix for the verify:false error Jsch throws when you make thousands of connections.
+                https://sourceforge.net/p/jsch/bugs/80/
+                Blindly retry till three times and throw up after.
+             */
 
-            session.connect();
+            int attempt = 0;
+            int maxAttempt = 3;
+            while(attempt <= maxAttempt) {
+                try {
+                    ++attempt;
+                    session.connect();
+                    attempt = maxAttempt + 1;
+                } catch (JSchException e) {
+                    if(!e.getMessage().equalsIgnoreCase("verify: false")) throw e;
+                    if(attempt > maxAttempt) throw e;
+                    //else pass. Do nothing and let the while repeat
+                }
+            }
             channel = (ChannelSftp) session.openChannel("sftp");
             channel.connect();
 
