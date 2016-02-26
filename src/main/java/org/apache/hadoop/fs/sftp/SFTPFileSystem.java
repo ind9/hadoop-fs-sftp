@@ -59,6 +59,7 @@ public class SFTPFileSystem extends FileSystem {
     public static final String FS_SFTP_HOST = "fs.sftp.host";
     public static final String FS_SFTP_HOST_PORT = "fs.sftp.host.port";
     public static final String FS_SFTP_KEYFILE = "fs.sftp.keyfile";
+    public static final String FS_SFTP_KEYSTRING = "fs.sftp.keystring";
     public static final String FS_SFTP_CONNECTION_MAX = "fs.sftp.connection.max";
     public static final String E_SAME_DIRECTORY_ONLY =
             "only same directory renames are supported";
@@ -151,9 +152,13 @@ public class SFTPFileSystem extends FileSystem {
         String user = conf.get(FS_SFTP_USER_PREFIX + host, null);
         String pwd = conf.get(FS_SFTP_PASSWORD_PREFIX + host + "." + user, null);
         String keyFile = conf.get(FS_SFTP_KEYFILE, null);
-
-        ChannelSftp channel =
-                connectionPool.connect(host, port, user, pwd, keyFile);
+        String keyString = conf.get(FS_SFTP_KEYSTRING, "");
+        ChannelSftp channel;
+        if(keyFile != null) {
+            channel = connectionPool.connect(host, port, user, pwd, keyFile);
+        } else {
+            channel = connectionPool.connect(host, port, user, pwd, keyString.getBytes());
+        }
 
         return channel;
     }

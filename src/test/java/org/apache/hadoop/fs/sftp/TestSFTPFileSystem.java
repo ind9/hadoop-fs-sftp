@@ -19,10 +19,12 @@ package org.apache.hadoop.fs.sftp;
 
 import java.io.IOException;
 import java.net.URI;
+import java.security.PublicKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import com.google.common.collect.Lists;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -35,8 +37,10 @@ import org.apache.sshd.SshServer;
 import org.apache.sshd.common.NamedFactory;
 import org.apache.sshd.server.Command;
 import org.apache.sshd.server.PasswordAuthenticator;
+import org.apache.sshd.server.PublickeyAuthenticator;
 import org.apache.sshd.server.UserAuth;
 import org.apache.sshd.server.auth.UserAuthPassword;
+import org.apache.sshd.server.auth.UserAuthPublicKey;
 import org.apache.sshd.server.keyprovider.SimpleGeneratorHostKeyProvider;
 import org.apache.sshd.server.session.ServerSession;
 import org.apache.sshd.server.sftp.SftpSubsystem;
@@ -59,9 +63,26 @@ public class TestSFTPFileSystem {
     @Rule public TestName name = new TestName();
 
     private static final String connection = "sftp://user:password@localhost";
+    private static final String connectionWithouPassword = "sftp://user@localhost";
+    private static final String dummyKey = "-----BEGIN RSA PRIVATE KEY-----\n" +
+            "MIICXQIBAAKBgQDTb6056fGwtczLFM2I2qeCCatBdPgF2Gt0qH0toD8LaMEV52Kx\n" +
+            "v8PyUXa1zZul90/nWCvcJgX/tSCYG8+u2eoVVp82bVrIbVfI8DB1qTJIwO3fROBs\n" +
+            "ZDa5SwHs4sgQJlXB5QW1OuP0Zow9zUiYuMDcBakZLhkRGWmqYTEoHbelfQIDAQAB\n" +
+            "AoGBALP0ceg/wBBZu3MBQqn/B+C6oAK3Lj2zZEnG+buyjtYEE4q0BCErCPgd875q\n" +
+            "v9Xy9xP8zF+0ERkBLTupOAsmt35i9pw2TYYzmhLPrnuwKJeexe/qcz6BlI8BdJY4\n" +
+            "LVIe59AUnKjH624HaxluIRlqNclcLpiSiJOi6AhUMeSxJ1UBAkEA+HndLgQ7cZ+S\n" +
+            "u9ZRwKoyNIy7PFXDSMHDu7XaIbUqD9Pi/W3sEq95RlSwVRsyhzF/8efCZLiLkSI1\n" +
+            "C8UYK9H0PQJBANnWsAuS6PiK15xQI1FjNk5p25OV7GsTcB5o+/kJRMAxLpv45OE7\n" +
+            "O39FOJEEoeSWf5Yqz/fgqSr8BggcO3n7SkECQDfTCUJBaSmJ9GmHKS7kDguIYriX\n" +
+            "fBxojBUsMinIjf6oWCMgAx3flpuag1NbnOqK0HgE3cPLQnAFA231hgyySvECQBd3\n" +
+            "fTeB9/7uVhPMvkFCQtNnq/PWLsXKLkXYYWyOhw19Ptwmj+GDlAE9374flaEeZVgz\n" +
+            "/HtjhFXRGIU/JVkarQECQQC+ebP9KFaQ5Q312H38LZfIiGHgQh75aYjeH8J1i/Ac\n" +
+            "LCuCOXtm+vayM4WXYwyrPdjGhD6RNW5rot2QRNS0xIIz\n" +
+            "-----END RSA PRIVATE KEY-----";
     private static Path localDir = null;
     private static FileSystem localFs = null;
     private static FileSystem sftpFs = null;
+    private static FileSystem sftpFsWithKey = null;
     private static SshServer sshd = null;
     private static int port;
 
@@ -74,6 +95,7 @@ public class TestSFTPFileSystem {
         List<NamedFactory<UserAuth>> userAuthFactories =
                 new ArrayList<NamedFactory<UserAuth>>();
         userAuthFactories.add(new UserAuthPassword.Factory());
+        userAuthFactories.add(new UserAuthPublicKey.Factory());
 
         sshd.setUserAuthFactories(userAuthFactories);
 
@@ -88,6 +110,13 @@ public class TestSFTPFileSystem {
             }
         });
 
+        sshd.setPublickeyAuthenticator(new PublickeyAuthenticator() {
+            @Override
+            public boolean authenticate(String username, PublicKey key, ServerSession session) {
+                return true;
+            }
+        });
+
         sshd.setSubsystemFactories(
                 Arrays.<NamedFactory<Command>>asList(new SftpSubsystem.Factory()));
 
@@ -95,6 +124,13 @@ public class TestSFTPFileSystem {
         port = sshd.getPort();
     }
 
+    public static Configuration prepareConf() {
+        Configuration conf = new Configuration();
+        conf.setClass("fs.sftp.impl", SFTPFileSystem.class, FileSystem.class);
+        conf.setInt("fs.sftp.host.port", port);
+        conf.setBoolean("fs.sftp.impl.disable.cache", true);
+        return  conf;
+    }
     @BeforeClass
     public static void setUp() throws Exception {
         // skip all tests if running on Windows
@@ -102,10 +138,7 @@ public class TestSFTPFileSystem {
 
         startSshdServer();
 
-        Configuration conf = new Configuration();
-        conf.setClass("fs.sftp.impl", SFTPFileSystem.class, FileSystem.class);
-        conf.setInt("fs.sftp.host.port", port);
-        conf.setBoolean("fs.sftp.impl.disable.cache", true);
+        Configuration conf = prepareConf();
 
         localFs = FileSystem.getLocal(conf);
         localDir = localFs.makeQualified(new Path(TEST_ROOT_DIR, TEST_SFTP_DIR));
@@ -115,6 +148,13 @@ public class TestSFTPFileSystem {
         localFs.mkdirs(localDir);
 
         sftpFs = FileSystem.get(URI.create(connection), conf);
+    }
+
+    public static void setupWithKey() throws Exception {
+        Configuration conf = prepareConf();
+        conf.set(SFTPFileSystem.FS_SFTP_KEYSTRING, dummyKey);
+
+        sftpFsWithKey = FileSystem.get(URI.create(connectionWithouPassword), conf);
     }
 
     @AfterClass
@@ -173,6 +213,20 @@ public class TestSFTPFileSystem {
     @Test
     public void testCreateFile() throws Exception {
         Path file = touch(sftpFs, name.getMethodName().toLowerCase());
+        assertTrue(localFs.exists(file));
+        assertTrue(sftpFs.delete(file, false));
+        assertFalse(localFs.exists(file));
+    }
+
+    /**
+     * Creates a file and deletes it.
+     *
+     * @throws Exception
+     */
+    @Test
+    public void testCreateFileWithKeyAuth() throws Exception {
+        setupWithKey();
+        Path file = touch(sftpFsWithKey, name.getMethodName().toLowerCase());
         assertTrue(localFs.exists(file));
         assertTrue(sftpFs.delete(file, false));
         assertFalse(localFs.exists(file));
