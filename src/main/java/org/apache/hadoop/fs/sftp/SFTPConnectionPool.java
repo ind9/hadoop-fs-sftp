@@ -192,7 +192,7 @@ class SFTPConnectionPool {
                     */
 
                 ++attempt;
-                session.connect(3 * 1000);
+                session.connect();
                 attempt = maxAttempt + 1;
             } catch (JSchException e) {
                 if (!e.getMessage().equalsIgnoreCase("verify: false") || attempt > maxAttempt) {
